@@ -65,10 +65,12 @@ service cloud.firestore {
           
           // Complete Match (Simulated for now, let's allow participants to update status)
           (existing().status == 'active' && incoming().status == 'completed' &&
+           (request.auth.uid == existing().creatorId || request.auth.uid == existing().opponentId) &&
            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'winnerId'])) ||
 
           // Penalty Share
           (existing().status == 'completed' && incoming().penaltyShared == true &&
+           (request.auth.uid == existing().creatorId || request.auth.uid == existing().opponentId) &&
            incoming().diff(existing()).affectedKeys().hasOnly(['penaltyShared']))
         )
       );
