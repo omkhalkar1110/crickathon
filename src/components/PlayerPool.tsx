@@ -75,7 +75,12 @@ export default function PlayerPool({ players, selectedIds, onTogglePlayer }: Pla
                 </div>
                 <div>
                   <h3 className="text-xs font-bold text-white group-hover:text-championship-gold transition-colors">{player.name}</h3>
-                  <p className="text-[9px] text-white/40 uppercase font-black tracking-tight">{player.role}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-[9px] text-white/40 uppercase font-black tracking-tight">{player.role}</p>
+                    {player.isOpener && <span className="px-1 py-0.5 bg-championship-gold/20 text-championship-gold text-[8px] font-black rounded uppercase">Opener</span>}
+                    {player.bowlingType === 'Fast' && <span className="px-1 py-0.5 bg-stadium-red/20 text-stadium-red text-[8px] font-black rounded uppercase">Fast</span>}
+                    {player.bowlingType === 'Spin' && <span className="px-1 py-0.5 bg-blue-500/20 text-blue-400 text-[8px] font-black rounded uppercase">Spin</span>}
+                  </div>
                 </div>
               </div>
               <div className="text-right">

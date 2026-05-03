@@ -13,6 +13,7 @@ import Header from './components/Header';
 import PlayerPool from './components/PlayerPool';
 import CricketPitch from './components/CricketPitch';
 import ChatBot from './components/ChatBot';
+import RequirementTracker from './components/RequirementTracker';
 import { INITIAL_PLAYERS, Player } from './data/players';
 import { motion } from 'motion/react';
 
@@ -85,6 +86,8 @@ export default function App() {
           squad={squad} 
           onRemovePlayer={removePlayer} 
         />
+
+        <RequirementTracker squad={squad} />
 
         {/* Stats Overlay */}
         <div className="absolute bottom-8 right-8 flex gap-4 z-30">
