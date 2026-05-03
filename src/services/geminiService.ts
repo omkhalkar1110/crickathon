@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { collection, addDoc, query, where, getDocs, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { INITIAL_PLAYERS } from "../data/players";
+import { handleFirestoreError, OperationType } from "../lib/firebaseUtils";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -34,9 +35,10 @@ Be technical, precise, and high-end. Always refer to players by full names.
 `;
 
 async function getCachedPlaybook(venue: string) {
+  const path = 'match_playbooks';
   try {
     const q = query(
-      collection(db, 'match_playbooks'),
+      collection(db, path),
       where('venue', '==', venue),
       orderBy('createdAt', 'desc'),
       limit(1)
@@ -46,7 +48,7 @@ async function getCachedPlaybook(venue: string) {
       return snapshot.docs[0].data().strategy;
     }
   } catch (e) {
-    console.error("Cache lookup error:", e);
+    handleFirestoreError(e, OperationType.GET, path);
   }
   return null;
 }
@@ -81,14 +83,15 @@ export async function getAnalystResponse(message: string, chatHistory: { role: s
 
     // Save to Firestore if it looks like a full playbook
     if (text.includes('🏟️ Venue Overview') && detectedVenue) {
+      const path = 'match_playbooks';
       try {
-        await addDoc(collection(db, 'match_playbooks'), {
+        await addDoc(collection(db, path), {
           venue: detectedVenue,
           strategy: text,
           createdAt: serverTimestamp()
         });
       } catch (e) {
-        console.error("Save error:", e);
+        handleFirestoreError(e, OperationType.CREATE, path);
       }
     }
 

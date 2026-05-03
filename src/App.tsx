@@ -100,6 +100,11 @@ export default function App() {
       nextSquad = squad.filter((p) => p.id !== player.id);
     } else {
       if (squad.length >= 11) return;
+      // Budget enforcement: check if adding this player exceeds limit
+      if (usedBudget + player.price > totalMaxBudget) {
+        // We could show a toast here, but for now we just block
+        return;
+      }
       nextSquad = [...squad, player];
     }
     addToHistory(nextSquad);
@@ -119,6 +124,41 @@ export default function App() {
   };
 
   const selectedIds = squad.map((p) => p.id);
+
+  const winProbability = useMemo(() => {
+    if (squad.length === 0) return 0;
+    
+    // 1. Base potential from squad size (reaching 11 increases baseline)
+    let prob = (squad.length / 11) * 40; 
+
+    // 2. Performance Factor
+    const avgRating = squad.reduce((a, b) => a + b.rating, 0) / squad.length;
+    prob += (avgRating - 85) * 3;
+
+    // 3. Balance Bonus
+    const roles = {
+      Batter: squad.filter(p => p.role === 'Batter').length,
+      Bowler: squad.filter(p => p.role === 'Bowler').length,
+      'All-rounder': squad.filter(p => p.role === 'All-rounder').length
+    };
+
+    if (roles.Batter >= 4) prob += 10;
+    if (roles.Bowler >= 4) prob += 10;
+    if (roles.Batter + roles['All-rounder'] >= 6) prob += 5;
+
+    // 4. Form/Trend Adjustment
+    // We calculate the average recent form compared to ratings
+    const formBonus = squad.reduce((sum, p) => {
+      const avgForm = (p.recentForm?.reduce((a, b) => a + b, 0) || 0) / (p.recentForm?.length || 1);
+      // Normalized form score
+      const threshold = p.role === 'Bowler' ? 2 : 50;
+      return sum + (avgForm > threshold ? 2 : -1);
+    }, 0);
+    
+    prob += formBonus;
+
+    return Math.min(Math.max(Math.round(prob), 5), 99);
+  }, [squad]);
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
@@ -262,7 +302,9 @@ export default function App() {
             </div>
             <div className="bg-white/5 border border-white/10 backdrop-blur-md p-4 rounded-lg flex flex-col items-center">
               <span className="text-[8px] uppercase text-white/40 tracking-widest font-bold">Win Prob.</span>
-              <span className="text-2xl font-black text-stadium-red">74%</span>
+              <span className={`text-2xl font-black ${winProbability > 70 ? 'text-green-500' : winProbability > 40 ? 'text-championship-gold' : 'text-stadium-red'}`}>
+                {winProbability}%
+              </span>
             </div>
           </div>
           

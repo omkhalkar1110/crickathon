@@ -1,6 +1,7 @@
 import { collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Player } from '../data/players';
+import { handleFirestoreError, OperationType } from './firebaseUtils';
 
 export interface Challenge {
   id: string;
@@ -19,6 +20,7 @@ export interface Challenge {
 export async function createChallenge(squad: Player[], userName: string) {
   if (!auth.currentUser) throw new Error('Not authenticated');
 
+  const path = 'challenges';
   const challengeData = {
     creatorId: auth.currentUser.uid,
     creatorName: userName || 'Legendary Player',
@@ -27,41 +29,59 @@ export async function createChallenge(squad: Player[], userName: string) {
     createdAt: serverTimestamp(),
   };
 
-  const docRef = await addDoc(collection(db, 'challenges'), challengeData);
-  return docRef.id;
+  try {
+    const docRef = await addDoc(collection(db, path), challengeData);
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+    throw error;
+  }
 }
 
 export async function acceptChallenge(challengeId: string, squad: Player[], userName: string) {
   if (!auth.currentUser) throw new Error('Not authenticated');
 
+  const path = `challenges/${challengeId}`;
   const challengeRef = doc(db, 'challenges', challengeId);
-  await updateDoc(challengeRef, {
-    opponentId: auth.currentUser.uid,
-    opponentName: userName || 'Challenger',
-    opponentSquad: squad,
-    status: 'active',
-  });
+  try {
+    await updateDoc(challengeRef, {
+      opponentId: auth.currentUser.uid,
+      opponentName: userName || 'Challenger',
+      opponentSquad: squad,
+      status: 'active',
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
 }
 
 export async function completeChallenge(challengeId: string) {
+  const path = `challenges/${challengeId}`;
   const challengeRef = doc(db, 'challenges', challengeId);
-  const challengeSnap = await getDoc(challengeRef);
-  
-  if (!challengeSnap.exists()) return;
-  
-  const data = challengeSnap.data();
-  // Simple mock resolution: random winner
-  const winnerId = Math.random() > 0.5 ? data.creatorId : data.opponentId;
+  try {
+    const challengeSnap = await getDoc(challengeRef);
+    if (!challengeSnap.exists()) return;
+    
+    const data = challengeSnap.data();
+    const winnerId = Math.random() > 0.5 ? data.creatorId : data.opponentId;
 
-  await updateDoc(challengeRef, {
-    status: 'completed',
-    winnerId: winnerId,
-  });
+    await updateDoc(challengeRef, {
+      status: 'completed',
+      winnerId: winnerId,
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
 }
 
 export async function markPenaltyShared(challengeId: string) {
+  const path = `challenges/${challengeId}`;
   const challengeRef = doc(db, 'challenges', challengeId);
-  await updateDoc(challengeRef, {
-    penaltyShared: true,
-  });
+  try {
+    await updateDoc(challengeRef, {
+      penaltyShared: true,
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
 }

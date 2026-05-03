@@ -110,8 +110,23 @@ function PitchPlayerSlot({ player, onRemove, color }: { player: Player, onRemove
             
             <div className="space-y-1.5">
               <div className="flex justify-between text-[9px] font-bold">
-                <span className="text-white/40">Price</span>
-                <span className="text-white">{player.price} Cr</span>
+                <span className="text-white/40">CV Score</span>
+                <span className="text-championship-gold">{player.price} Cr</span>
+              </div>
+              <div className="pt-1 border-t border-white/5">
+                <span className="text-[7px] font-black uppercase text-white/40 mb-1 block">Recent Form</span>
+                <div className="flex gap-1 items-end h-6">
+                  {player.recentForm?.map((score, i) => (
+                    <div 
+                      key={i} 
+                      className="bg-white/20 w-full rounded-t-sm"
+                      style={{ 
+                        height: `${Math.min((score / (player.role === 'Bowler' ? 5 : 100)) * 100, 100)}%`,
+                        opacity: 0.3 + (i * 0.15) 
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
               <div className="flex justify-between text-[9px] font-bold">
                 <span className="text-white/40">Role</span>
