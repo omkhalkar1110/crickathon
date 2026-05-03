@@ -13,11 +13,21 @@ export default function PlayerPool({ players, selectedIds, onTogglePlayer }: Pla
   const [filter, setFilter] = useState<PlayerRole | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
 
-  const filteredPlayers = players.filter(p => {
-    const matchesFilter = filter === 'ALL' || p.role === filter;
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const filteredPlayers = players
+    .map(p => {
+      // Calculate Strategic Value Points
+      // Base: Rating * 10
+      // Bonus: +5 for Opener status, +3 for specialized bowling
+      // This creates a dynamic ranking for the UI
+      const points = (p.rating * 10) + (p.isOpener ? 5 : 0) + (p.bowlingType ? 3 : 0);
+      return { ...p, points };
+    })
+    .filter(p => {
+      const matchesFilter = filter === 'ALL' || p.role === filter;
+      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+      return matchesFilter && matchesSearch;
+    })
+    .sort((a, b) => b.points - a.points); // Sort by Strategic Value descending
 
   return (
     <aside className="w-[320px] h-full bg-white/5 backdrop-blur-xl border-r border-white/10 p-4 flex flex-col gap-4 z-40">
@@ -77,9 +87,12 @@ export default function PlayerPool({ players, selectedIds, onTogglePlayer }: Pla
                   <h3 className="text-xs font-bold text-white group-hover:text-championship-gold transition-colors">{player.name}</h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <p className="text-[9px] text-white/40 uppercase font-black tracking-tight">{player.role}</p>
-                    {player.isOpener && <span className="px-1 py-0.5 bg-championship-gold/20 text-championship-gold text-[8px] font-black rounded uppercase">Opener</span>}
-                    {player.bowlingType === 'Fast' && <span className="px-1 py-0.5 bg-stadium-red/20 text-stadium-red text-[8px] font-black rounded uppercase">Fast</span>}
-                    {player.bowlingType === 'Spin' && <span className="px-1 py-0.5 bg-blue-500/20 text-blue-400 text-[8px] font-black rounded uppercase">Spin</span>}
+                    {player.isOpener && <span className="px-1 py-0.5 bg-championship-gold/10 text-championship-gold text-[8px] font-black rounded uppercase">Opener</span>}
+                    {player.bowlingType === 'Fast' && <span className="px-1 py-0.5 bg-stadium-red/10 text-stadium-red text-[8px] font-black rounded uppercase">Fast</span>}
+                    {player.bowlingType === 'Spin' && <span className="px-1 py-0.5 bg-blue-500/10 text-blue-400 text-[8px] font-black rounded uppercase">Spin</span>}
+                    <span className="px-1 py-0.5 bg-white/5 border border-white/10 text-white/40 text-[7px] font-black rounded uppercase ml-auto">
+                      {Math.round(player.points)} SV
+                    </span>
                   </div>
                 </div>
               </div>

@@ -8,22 +8,79 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Header from './components/Header';
 import PlayerPool from './components/PlayerPool';
 import CricketPitch from './components/CricketPitch';
 import ChatBot from './components/ChatBot';
 import RequirementTracker from './components/RequirementTracker';
+import ChallengeLobby from './components/ChallengeSystem/ChallengeLobby';
+import OpponentLobby from './components/ChallengeSystem/OpponentLobby';
+import MatchDashboard from './components/ChallengeSystem/MatchDashboard';
+import PostMatchResults from './components/ChallengeSystem/PostMatchResults';
 import { INITIAL_PLAYERS, Player } from './data/players';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
+import { db, auth } from './lib/firebase';
+import { onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
+import { Challenge, acceptChallenge } from './lib/challengeService';
+import { Swords, X, LogIn } from 'lucide-react';
 
 const MAX_BUDGET = 100;
 
 export default function App() {
   const [history, setHistory] = useState<Player[][]>([[]]);
   const [pointer, setPointer] = useState(0);
+  const [extraBudget, setExtraBudget] = useState(0);
+
+  // Challenge System State
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [currentChallenge, setCurrentChallenge] = useState<Challenge | null>(null);
+  const [showChallengeCreator, setShowChallengeCreator] = useState(false);
+  const [mode, setMode] = useState<'build' | 'challenge'>('build');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    // 1. Handle Auth
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+    });
+
+    // 2. Handle Challenge ID from URL
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('challengeId');
+    if (id) {
+      setChallengeId(id);
+    }
+
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    if (challengeId) {
+      const unsubscribeDoc = onSnapshot(doc(db, 'challenges', challengeId), (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data() as Challenge;
+          setCurrentChallenge({ ...data, id: snapshot.id });
+          
+          // Determine mode/view
+          if (data.status === 'pending') {
+            if (data.creatorId !== auth.currentUser?.uid) {
+              setMode('challenge');
+            }
+          } else if (data.status === 'active' || data.status === 'completed') {
+            setMode('challenge');
+          }
+        }
+      });
+      return () => unsubscribeDoc();
+    }
+  }, [challengeId, isAuthenticated]);
 
   const squad = useMemo(() => history[pointer], [history, pointer]);
+
+  const MAX_BASE_BUDGET = 100;
+  const totalMaxBudget = MAX_BASE_BUDGET + extraBudget;
 
   const usedBudget = useMemo(() => {
     return squad.reduce((total, player) => total + player.price, 0);
@@ -63,16 +120,94 @@ export default function App() {
 
   const selectedIds = squad.map((p) => p.id);
 
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
+  };
+
+  const handleAcceptChallenge = async () => {
+    if (!isAuthenticated) {
+      await handleLogin();
+      return;
+    }
+    if (!challengeId || !currentChallenge) return;
+    await acceptChallenge(challengeId, squad, auth.currentUser?.displayName || 'Challenger Elite');
+  };
+
+  const handleCreateChallengeClick = async () => {
+    if (!isAuthenticated) {
+      await handleLogin();
+      return;
+    }
+    setShowChallengeCreator(true);
+  };
+
+  const renderChallengeContent = () => {
+    if (!currentChallenge) return null;
+
+    if (currentChallenge.status === 'pending' && currentChallenge.creatorId !== auth.currentUser?.uid) {
+      return (
+        <OpponentLobby 
+          challenge={currentChallenge} 
+          onAccept={() => setMode('build')} 
+        />
+      );
+    }
+
+    if (currentChallenge.status === 'active' || (currentChallenge.status === 'completed' && !currentChallenge.penaltyShared)) {
+      if (currentChallenge.status === 'completed') {
+        const isParticipant = auth.currentUser?.uid === currentChallenge.creatorId || auth.currentUser?.uid === currentChallenge.opponentId;
+        if (isParticipant) {
+           return (
+             <PostMatchResults 
+               challenge={currentChallenge} 
+               onUnlocked={() => {
+                 setMode('build');
+                 setChallengeId(null);
+               }} 
+             />
+           );
+        }
+      }
+      return (
+        <MatchDashboard 
+          challenge={currentChallenge} 
+          isCreator={auth.currentUser?.uid === currentChallenge.creatorId} 
+        />
+      );
+    }
+
+    return null;
+  };
+
   return (
     <div id="app-root" className="w-full h-screen bg-[#121212] text-white font-sans flex flex-col overflow-hidden relative">
+      <AnimatePresence>
+        {mode === 'challenge' && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100]"
+          >
+            {renderChallengeContent()}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Header 
         used={usedBudget} 
-        max={MAX_BUDGET} 
+        max={totalMaxBudget} 
         playerCount={squad.length} 
         onUndo={undo} 
         onRedo={redo} 
         canUndo={pointer > 0} 
         canRedo={pointer < history.length - 1} 
+        onCreditPurchased={(amount) => setExtraBudget(prev => prev + amount)}
       />
 
       <main className="flex flex-1 overflow-hidden relative">
@@ -89,18 +224,79 @@ export default function App() {
 
         <RequirementTracker squad={squad} />
 
-        {/* Stats Overlay */}
-        <div className="absolute bottom-8 right-8 flex gap-4 z-30">
-          <div className="bg-white/5 border border-white/10 backdrop-blur-md p-4 rounded-lg flex flex-col items-center">
-            <span className="text-[8px] uppercase text-white/40 tracking-widest font-bold">Proj. Points</span>
-            <span className="text-2xl font-black text-championship-gold">
-              {squad.reduce((a, b) => a + b.rating * 10, 0)}
-            </span>
+        {/* Challenge Creator Overlay */}
+        <AnimatePresence>
+          {showChallengeCreator && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            >
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowChallengeCreator(false)} />
+              <ChallengeLobby 
+                squad={squad} 
+                onChallengeCreated={(id) => {
+                  setChallengeId(id);
+                  setShowChallengeCreator(false);
+                }} 
+              />
+              <button 
+                onClick={() => setShowChallengeCreator(false)}
+                className="absolute top-8 right-8 text-white/40 hover:text-white transition-colors"
+              >
+                <X size={32} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Stats Overlay & Challenge Button */}
+        <div className="absolute bottom-8 right-8 flex flex-col gap-4 z-30">
+          <div className="flex gap-4">
+            <div className="bg-white/5 border border-white/10 backdrop-blur-md p-4 rounded-lg flex flex-col items-center">
+              <span className="text-[8px] uppercase text-white/40 tracking-widest font-bold">Proj. Points</span>
+              <span className="text-2xl font-black text-championship-gold">
+                {squad.reduce((a, b) => a + b.rating * 10, 0)}
+              </span>
+            </div>
+            <div className="bg-white/5 border border-white/10 backdrop-blur-md p-4 rounded-lg flex flex-col items-center">
+              <span className="text-[8px] uppercase text-white/40 tracking-widest font-bold">Win Prob.</span>
+              <span className="text-2xl font-black text-stadium-red">74%</span>
+            </div>
           </div>
-          <div className="bg-white/5 border border-white/10 backdrop-blur-md p-4 rounded-lg flex flex-col items-center">
-            <span className="text-[8px] uppercase text-white/40 tracking-widest font-bold">Win Prob.</span>
-            <span className="text-2xl font-black text-stadium-red">74%</span>
-          </div>
+          
+          {currentChallenge?.status === 'pending' && currentChallenge.creatorId !== auth.currentUser?.uid ? (
+            <button 
+              onClick={handleAcceptChallenge}
+              disabled={squad.length !== 11}
+              className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 font-black uppercase text-xs italic tracking-widest transition-all ${
+                squad.length === 11 
+                ? 'bg-championship-gold text-black shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:scale-105' 
+                : 'bg-white/5 text-white/20 border border-white/10'
+              }`}
+            >
+              {!isAuthenticated ? <LogIn size={18} /> : <Swords size={18} />}
+              {squad.length === 11 
+                ? (!isAuthenticated ? 'Login to Confirm Battle' : 'Finalize & Fight') 
+                : `Finish Squad (${squad.length}/11)`}
+            </button>
+          ) : (
+            <button 
+              onClick={handleCreateChallengeClick}
+              disabled={squad.length !== 11}
+              className={`w-full py-4 rounded-xl flex items-center justify-center gap-3 font-black uppercase text-xs italic tracking-widest transition-all ${
+                squad.length === 11 
+                ? 'bg-championship-gold text-black shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:scale-105' 
+                : 'bg-white/5 text-white/20 border border-white/10'
+              }`}
+            >
+              {!isAuthenticated ? <LogIn size={18} /> : <Swords size={18} />}
+              {squad.length === 11 
+                ? (!isAuthenticated ? 'Login to Challege' : '1v1 Battle Link') 
+                : `Finish Squad (${squad.length}/11)`}
+            </button>
+          )}
         </div>
       </main>
 

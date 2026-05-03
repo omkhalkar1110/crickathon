@@ -82,6 +82,8 @@ export default function CricketPitch({ squad, onRemovePlayer }: CricketPitchProp
 }
 
 function PitchPlayerSlot({ player, onRemove, color }: { player: Player, onRemove: (id: string) => void, color: string, key?: React.Key }) {
+  const [isHovered, setIsHovered] = React.useState(false);
+
   return (
     <motion.div
       initial={{ scale: 0, opacity: 0 }}
@@ -89,7 +91,54 @@ function PitchPlayerSlot({ player, onRemove, color }: { player: Player, onRemove
       exit={{ scale: 0, opacity: 0 }}
       className="flex flex-col items-center group relative cursor-pointer"
       onClick={() => onRemove(player.id)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
+      {/* Stats Tooltip */}
+      <AnimatePresence>
+        {isHovered && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="absolute bottom-full mb-3 z-[100] w-36 p-3 bg-black/90 border border-white/10 backdrop-blur-xl rounded-xl shadow-2xl pointer-events-none"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[8px] font-black uppercase text-white/40 tracking-widest">Stats</span>
+              <span className="text-[10px] font-black text-championship-gold italic">{player.rating} RTG</span>
+            </div>
+            
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[9px] font-bold">
+                <span className="text-white/40">Price</span>
+                <span className="text-white">{player.price} Cr</span>
+              </div>
+              <div className="flex justify-between text-[9px] font-bold">
+                <span className="text-white/40">Role</span>
+                <span className="text-white">{player.role}</span>
+              </div>
+              {player.isOpener && (
+                <div className="flex justify-between text-[9px] font-bold">
+                  <span className="text-white/40">Special</span>
+                  <span className="text-championship-gold">Opener</span>
+                </div>
+              )}
+              {player.bowlingType && (
+                <div className="flex justify-between text-[9px] font-bold">
+                  <span className="text-white/40">Bowling</span>
+                  <span className={`text-white ${player.bowlingType === 'Fast' ? 'text-stadium-red' : 'text-blue-400'}`}>
+                    {player.bowlingType}
+                  </span>
+                </div>
+              )}
+            </div>
+            
+            {/* Tooltip Arrow */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-black/90" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className={`w-14 h-14 rounded-full border-2 ${color} bg-black/80 flex items-center justify-center shadow-[0_0_20px_rgba(255,215,0,0.2)] overflow-hidden transition-transform group-hover:scale-110`}>
          {player.image ? (
            <img src={player.image} alt={player.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Undo2, Redo2 } from 'lucide-react';
+import { Undo2, Redo2, PlusCircle } from 'lucide-react';
+import PaymentModal from './PaymentModal';
 
 interface HeaderProps {
   used: number;
@@ -9,9 +11,11 @@ interface HeaderProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onCreditPurchased: (amount: number) => void;
 }
 
-export default function Header({ used, max, playerCount, onUndo, onRedo, canUndo, canRedo }: HeaderProps) {
+export default function Header({ used, max, playerCount, onUndo, onRedo, canUndo, canRedo, onCreditPurchased }: HeaderProps) {
+  const [showPayment, setShowPayment] = useState(false);
   const isOver = used > max;
   const percentage = Math.min((used / max) * 100, 100);
 
@@ -71,6 +75,15 @@ export default function Header({ used, max, playerCount, onUndo, onRedo, canUndo
 
       {/* Actions */}
       <div className="flex items-center gap-6">
+        {isOver && (
+          <button 
+            onClick={() => setShowPayment(true)}
+            className="flex items-center gap-2 bg-stadium-red px-4 py-2 rounded text-[10px] font-black uppercase italic shadow-[0_0_15px_rgba(215,25,32,0.4)] hover:scale-105 active:scale-95 transition-all text-white border border-white/20 animate-pulse"
+          >
+            <PlusCircle size={14} />
+            Buy Extra Credit
+          </button>
+        )}
         <div className="text-right">
           <p className="text-[10px] uppercase text-white/40 font-bold">Players</p>
           <p className="font-bold text-championship-gold">{playerCount}/11</p>
@@ -79,6 +92,16 @@ export default function Header({ used, max, playerCount, onUndo, onRedo, canUndo
           Confirm Squad
         </button>
       </div>
+
+      <PaymentModal 
+        isOpen={showPayment} 
+        onClose={() => setShowPayment(false)} 
+        onSuccess={(amount) => {
+          onCreditPurchased(amount);
+          setShowPayment(false);
+        }}
+        requiredAmount={used - max}
+      />
     </header>
   );
 }
