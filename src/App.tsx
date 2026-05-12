@@ -24,6 +24,7 @@ import { db, auth } from './lib/firebase';
 import { onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
 import { Challenge, acceptChallenge } from './lib/challengeService';
+import { handleFirestoreError, OperationType } from './lib/firebaseUtils';
 import { Swords, X, LogIn } from 'lucide-react';
 
 const MAX_BUDGET = 100;
@@ -53,6 +54,19 @@ export default function App() {
       setChallengeId(id);
     }
 
+    // 3. Test Connection
+    const testConnection = async () => {
+      try {
+        const { doc, getDocFromServer } = await import('firebase/firestore');
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration.");
+        }
+      }
+    };
+    testConnection();
+
     return () => unsubscribeAuth();
   }, []);
 
@@ -72,6 +86,8 @@ export default function App() {
             setMode('challenge');
           }
         }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, `challenges/${challengeId}`);
       });
       return () => unsubscribeDoc();
     }

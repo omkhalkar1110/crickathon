@@ -1,10 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
 import { collection, addDoc, query, where, getDocs, limit, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { INITIAL_PLAYERS } from "../data/players";
 import { handleFirestoreError, OperationType } from "../lib/firebaseUtils";
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SYSTEM_INSTRUCTION = `
 You are the "Head of Cricket Strategy & Analytics." Your mission is to provide 360-degree match advice for any venue or player combination provided.
@@ -66,20 +63,25 @@ export async function getAnalystResponse(message: string, chatHistory: { role: s
       }
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [
-        ...chatHistory.map(h => ({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] })),
-        { role: 'user', parts: [{ text: message }] }
-      ],
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.7,
-        tools: [{ googleSearch: {} }]
+    const response = await fetch("/api/gemini", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        message,
+        chatHistory,
+        systemInstruction: SYSTEM_INSTRUCTION,
+      }),
     });
 
-    const text = response.text;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to get response from server");
+    }
+
+    const data = await response.json();
+    const text = data.text;
 
     // Save to Firestore if it looks like a full playbook
     if (text.includes('🏟️ Venue Overview') && detectedVenue) {
